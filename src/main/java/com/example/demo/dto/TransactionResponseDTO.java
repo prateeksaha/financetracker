@@ -8,12 +8,15 @@ public class TransactionResponseDTO {
     private Double amount;
     private String category;
     private LocalDateTime createdAt;
+    private String budgetStatus;
 
-    public TransactionResponseDTO(Long id, Double amount, String category, LocalDateTime createdAt) {
+    public TransactionResponseDTO(Long id, Double amount, String category, LocalDateTime createdAt,
+                                  String budgetStatus) {
         this.id = id;
         this.amount = amount;
         this.category = category;
         this.createdAt = createdAt;
+        this.budgetStatus = budgetStatus;
     }
 
     public Long getId() {
@@ -31,4 +34,6 @@ public class TransactionResponseDTO {
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
+
+    public String getBudgetStatus() { return budgetStatus; }
 }
