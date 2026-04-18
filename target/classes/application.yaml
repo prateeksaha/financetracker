@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: demo
+  datasource:
+    url: jdbc:oracle:thin:@//localhost:1521/XEPDB1
+    username: app_user
+    password: password
+    driver-class-name: oracle.jdbc.OracleDriver
+
+  jpa:
+    database-platform: org.hibernate.dialect.OracleDialect
+    hibernate:
+      ddl-auto: none
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
