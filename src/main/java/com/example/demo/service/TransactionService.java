@@ -6,10 +6,12 @@ import com.example.demo.dto.TransactionResponseDTO;
 import com.example.demo.entity.Transaction;
 import com.example.demo.repository.TransactionRepository;
 import com.example.demo.specification.TransactionSpecification;
-import jakarta.transaction.Transactional;
+
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.*;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -18,12 +20,12 @@ import java.util.stream.Collectors;
 @Service
 public class TransactionService {
 
-    private final TransactionRepository repository;
+    private final TransactionRepository transactionRepository;
     private final BudgetService budgetService;
 
-    public TransactionService(TransactionRepository repository,
+    public TransactionService(TransactionRepository transactionRepository,
                               BudgetService budgetService) {
-        this.repository = repository;
+        this.transactionRepository = transactionRepository;
         this.budgetService = budgetService;
     }
 
@@ -31,6 +33,10 @@ public class TransactionService {
     // CREATE (WITH BUDGET STATUS)
     // =========================
     @Transactional
+    @CacheEvict(
+            value = "budgetStatusCache",
+            key = "#request.category + '-' + T(java.time.LocalDateTime).now().getMonthValue() + '-' + T(java.time.LocalDateTime).now().getYear()"
+    )
     public TransactionResponseDTO create(TransactionRequestDTO request) {
 
         Transaction transaction = new Transaction();
@@ -38,7 +44,7 @@ public class TransactionService {
         transaction.setCategory(request.getCategory());
         transaction.setCreatedAt(LocalDateTime.now());
 
-        Transaction saved = repository.save(transaction);
+        Transaction saved = transactionRepository.save(transaction);
 
         LocalDateTime now = LocalDateTime.now();
 
@@ -71,7 +77,7 @@ public class TransactionService {
                         .and(TransactionSpecification.createdAfter(from))
                         .and(TransactionSpecification.createdBefore(to));
 
-        return repository.findAll(spec)
+        return transactionRepository.findAll(spec)
                 .stream()
                 .map(t -> new TransactionResponseDTO(
                         t.getId(),
@@ -106,7 +112,7 @@ public class TransactionService {
                         .and(TransactionSpecification.createdAfter(from))
                         .and(TransactionSpecification.createdBefore(to));
 
-        return repository.findAll(spec, pageable)
+        return transactionRepository.findAll(spec, pageable)
                 .map(t -> new TransactionResponseDTO(
                         t.getId(),
                         t.getAmount(),

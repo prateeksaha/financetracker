@@ -3,16 +3,20 @@ package com.example.demo.budget.service;
 import com.example.demo.budget.dto.BudgetAlertDTO;
 import com.example.demo.budget.dto.BudgetRequestDTO;
 import com.example.demo.budget.dto.BudgetResponseDTO;
+import com.example.demo.budget.dto.CategorySpendView;
 import com.example.demo.budget.entity.Budget;
 import com.example.demo.budget.repository.BudgetRepository;
-import com.example.demo.entity.Transaction;
 import com.example.demo.repository.TransactionRepository;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class BudgetService {
@@ -59,18 +63,16 @@ public class BudgetService {
         LocalDateTime start = LocalDateTime.of(year, month, 1, 0, 0);
         LocalDateTime end = start.plusMonths(1);
 
-        List<Transaction> transactions =
-                transactionRepository.findAll();
-
-        return transactions.stream()
-                .filter(t -> t.getCategory().equalsIgnoreCase(category))
-                .filter(t -> !t.getCreatedAt().isBefore(start))
-                .filter(t -> t.getCreatedAt().isBefore(end))
-                .mapToDouble(Transaction::getAmount)
-                .sum();
+        return transactionRepository.getTotalSpent(category, start, end);
     }
 
     // 4. CHECK BUDGET STATUS (IMPORTANT)
+    // to do: need to check for concurrency
+    @Transactional(readOnly = true)
+    @Cacheable(
+            value = "budgetStatusCache",
+            key = "#category + '-' + #month + '-' + #year"
+    )
     public String checkBudgetStatus(String category, int month, int year) {
 
         Optional<Budget> budgetOpt =
@@ -94,20 +96,30 @@ public class BudgetService {
 
     public List<BudgetAlertDTO> getExceededBudgets(int month, int year) {
 
+        LocalDateTime start = LocalDateTime.of(year, month, 1, 0, 0);
+        LocalDateTime end = start.plusMonths(1);
+
+        // ✅ ONE DB CALL
+        List<CategorySpendView> spendList =
+                transactionRepository.getTotalSpentByCategory(start, end);
+
+        // Convert list → Map for fast lookup
+        Map<String, Double> spendMap = spendList.stream()
+                .collect(Collectors.toMap(
+                        CategorySpendView::getCategory,
+                        CategorySpendView::getTotal
+                ));
+
+        // Still one query (acceptable)
         List<Budget> budgets = budgetRepository.findAll();
 
         return budgets.stream()
                 .map(budget -> {
 
-                    LocalDateTime start = LocalDateTime.of(year, month, 1, 0, 0);
-                    LocalDateTime end = start.plusMonths(1);
-
-                    Double spent = getTotalSpent(
-                            budget.getCategory(),
-                            month,
-                            year
+                    Double spent = spendMap.getOrDefault(
+                            budget.getCategory().toLowerCase(),
+                            0.0
                     );
-
 
                     if (spent > budget.getMonthlyLimit()) {
                         return new BudgetAlertDTO(
@@ -120,7 +132,7 @@ public class BudgetService {
 
                     return null;
                 })
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .toList();
     }
 }
